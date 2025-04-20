@@ -1,5 +1,5 @@
 import { createClient, createDatabase, createRelations } from "monarch-orm";
-import { getConfig } from "../config";
+import { appConfig } from "../config";
 import { links } from "./links";
 import { users } from "./users";
 
@@ -17,7 +17,7 @@ const linksRelations = createRelations(links, ({ ref }) => {
 });
 
 // TODO: change this
-const client = createClient(getConfig().dbUrl);
+const client = createClient(appConfig.dbUrl);
 
 export const database = createDatabase(client.db(), {
   users,

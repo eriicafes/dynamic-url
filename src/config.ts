@@ -1,16 +1,22 @@
 import "dotenv/config";
+import z from "zod";
 
-type Config = {
-  port: number;
-  dbUrl: string;
-};
+const envSchema = z.object({
+  PORT: z.coerce.number().default(4000),
+  DB_URL: z.string(),
+  SECRET: z.string(),
+});
 
-export function getConfig(): Config {
-  const port = process.env.PORT ?? "4000";
-  const dbUrl = process.env.DB_URL ?? "mongodb://localhost:27017/dynamic-url";
+const { data, success, error } = envSchema.safeParse(process.env);
 
-  return {
-    port: parseInt(port),
-    dbUrl,
-  };
+if (!success) {
+  throw new Error("Invalid environment variables:", error);
 }
+
+export const appConfig = {
+  port: data.PORT,
+  secret: data.SECRET,
+  dbUrl: data.DB_URL,
+} as const;
+
+export type AppConfig = typeof appConfig;
