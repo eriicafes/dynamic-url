@@ -7,7 +7,6 @@ export const links = createSchema("links", {
   userId: objectId(),
   hashedPassword: string().optional(),
   views: number().default(0),
-  // TODO: extra fields
 }).indexes(({ createIndex }) => {
   return {
     userLinkName: createIndex({ userId: 1, name: 1 }, { unique: true }),

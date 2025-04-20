@@ -30,6 +30,7 @@ export const links = createModule()
         let hashedPassword: string | undefined;
         if (body.password) {
           hashedPassword = await bcrypt.hash(body.password, 10);
+          delete body.password;
         }
 
         const link = await database.collections.links
@@ -85,6 +86,13 @@ export const links = createModule()
           });
         }
 
+        // hash password if provided
+        let hashedPassword: string | undefined;
+        if (body.password) {
+          hashedPassword = await bcrypt.hash(body.password, 10);
+          delete body.password;
+        }
+
         // update link
         const updateResult = await database.collections.links.updateOne(
           {
@@ -93,8 +101,8 @@ export const links = createModule()
           },
           {
             $set: {
-              name: body.name,
-              url: body.url,
+              ...body,
+              hashedPassword,
             },
           }
         );

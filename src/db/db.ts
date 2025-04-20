@@ -16,7 +16,6 @@ const linksRelations = createRelations(links, ({ ref }) => {
   };
 });
 
-// TODO: change this
 const client = createClient(appConfig.dbUrl);
 
 export const database = createDatabase(client.db(), {
