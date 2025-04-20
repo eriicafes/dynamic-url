@@ -1,4 +1,5 @@
 import { zValidator } from "@hono/zod-validator";
+import bcrypt from "bcrypt";
 import { HTTPException } from "hono/http-exception";
 import { toObjectId } from "monarch-orm";
 import { createModule } from "serverstruct";
@@ -25,11 +26,17 @@ export const links = createModule()
         // parse req body
         const body = c.req.valid("json");
 
+        // hash password if provided
+        let hashedPassword: string | undefined;
+        if (body.password) {
+          hashedPassword = await bcrypt.hash(body.password, 10);
+        }
+
         const link = await database.collections.links
           .insertOne({
+            ...body,
             userId: userId,
-            name: body.name,
-            url: body.url,
+            hashedPassword,
           })
           .catch((err) => {
             if (err.code === 11000) {
@@ -140,10 +147,12 @@ const linksSchemas = {
   create: z.object({
     name: z.string(),
     url: z.string().url(),
+    password: z.string().optional(),
   }),
 
   update: z.object({
     name: z.string(),
     url: z.string().url(),
+    password: z.string().optional(),
   }),
 };

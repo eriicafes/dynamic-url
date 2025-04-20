@@ -1,32 +1,64 @@
-import { HTTPException } from "hono/http-exception";
+import bcrypt from "bcrypt";
+import { basicAuth } from "hono/basic-auth";
+import { InferOutput } from "monarch-orm";
 import { createModule } from "serverstruct";
 import { database } from "../db/db";
-import { JwtService } from "../services/jwt";
+import { Middlewares } from "../services/middlewares";
 
 export const redirects = createModule()
-  .use<{ jwt: JwtService }>()
-  .route((app) => {
-    return app.get("/:username/:name", async (c) => {
-      // get the link
-      const { username, name } = c.req.param();
+  .use<{ middlewares: Middlewares }>()
+  .route((app, { middlewares }) => {
+    return app.get(
+      "/:username/:name",
+      middlewares.ownerLink(),
+      basicAuth({
+        async verifyUser(username, password, c) {
+          const owner = c.get("owner") as InferOutput<
+            typeof database,
+            "users",
+            { select: { username: true } }
+          >;
+          const link = c.get("link") as InferOutput<
+            typeof database,
+            "links",
+            {}
+          >;
 
-      const owner = await database.collections.users
-        .findOne({
-          username,
-        })
-        .select({ username: true });
-      if (!owner) throw new HTTPException(404);
+          if (username !== owner.username) return false;
+          if (link.hashedPassword) {
+            const verified = await bcrypt.compare(
+              password,
+              link.hashedPassword
+            );
+            return verified;
+          }
+          return true;
+        },
+      }),
+      async (c) => {
+        const link = c.get("link");
 
-      const link = await database.collections.links.findOne({
-        userId: owner._id,
-        name,
-      });
-      if (!link) throw new HTTPException(404);
+        // increment in the background
+        // TODO: should be in a queue
+        database.collections.links
+          .updateOne(
+            {
+              _id: link._id,
+            },
+            {
+              $inc: {
+                views: 1,
+              },
+            }
+          )
+          .exec()
+          .catch((err) => {
+            console.log("Failed to update view count:", err);
+          });
 
-      // TODO: check if user is authorized
-      console.log(link);
-
-      // redirect to the link
-      return c.redirect(link?.url);
-    });
+        // redirect to the link
+        // @ts-ignore
+        return c.redirect(link.url);
+      }
+    );
   });

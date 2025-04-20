@@ -1,6 +1,7 @@
 import { MiddlewareHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { ObjectId, toObjectId } from "monarch-orm";
+import { InferOutput, ObjectId, toObjectId } from "monarch-orm";
+import { database } from "../db/db";
 import { JwtService } from "./jwt";
 
 export class Middlewares {
@@ -27,6 +28,42 @@ export class Middlewares {
       // set user in context
       c.set("userId", userId);
 
+      return next();
+    };
+  }
+
+  public ownerLink(): MiddlewareHandler<
+    {
+      Variables: {
+        owner: InferOutput<
+          typeof database,
+          "users",
+          { select: { username: true } }
+        >;
+        link: InferOutput<typeof database, "links", {}>;
+      };
+    },
+    "/:username/:name"
+  > {
+    return async (c, next) => {
+      // get the link
+      const { username, name } = c.req.param();
+
+      const owner = await database.collections.users
+        .findOne({
+          username,
+        })
+        .select({ username: true });
+      if (!owner) throw new HTTPException(404);
+
+      const link = await database.collections.links.findOne({
+        userId: owner._id,
+        name,
+      });
+      if (!link) throw new HTTPException(404);
+
+      c.set("owner", owner);
+      c.set("link", link);
       return next();
     };
   }

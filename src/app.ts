@@ -24,6 +24,8 @@ export const app = createModule()
         const exception =
           err instanceof HTTPException ? err : new HTTPException(500);
 
+        if (exception.res) return exception.res;
+
         if (!exception.message) {
           return c.body(null, exception.status);
         }
