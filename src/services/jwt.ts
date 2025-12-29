@@ -1,25 +1,23 @@
 import * as nJwt from "njwt";
-import { appConfig } from "../config";
+import { appConfig } from "../config.ts";
 
-type JwtCLaims = {
+type JwtClaims = {
   sub: string;
 };
 
 export class JwtService {
-  constructor() {}
-
-  sign(claims: JwtCLaims): string {
+  sign(claims: JwtClaims): string {
     const jwt = nJwt
       .create(claims, appConfig.secret)
       .setExpiration(Date.now() + 1000 * 60 * 15); // 15 minute;
     return jwt.compact();
   }
 
-  verify(token: string): JwtCLaims | null {
+  verify(token: string): JwtClaims | null {
     try {
       const jwt = nJwt.verify(token, appConfig.secret);
       if (!jwt) throw new Error("Invalid token");
-      return jwt.body.toJSON() as JwtCLaims;
+      return jwt.body.toJSON() as JwtClaims;
     } catch (e) {
       return null;
     }

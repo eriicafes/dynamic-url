@@ -1,64 +1,76 @@
 import bcrypt from "bcrypt";
-import { basicAuth } from "hono/basic-auth";
-import { InferOutput } from "monarch-orm";
-import { createModule } from "serverstruct";
-import { database } from "../db/db";
-import { Middlewares } from "../services/middlewares";
+import { HTTPResponse, redirect } from "h3";
+import { controller } from "serverstruct";
+import { database } from "../db/index.ts";
+import { ownerLinkContext, ownerLinkMiddleware } from "../middlewares/owner.ts";
 
-export const redirects = createModule()
-  .use<{ middlewares: Middlewares }>()
-  .route((app, { middlewares }) => {
-    return app.get(
-      "/:username/:name",
-      middlewares.ownerLink(),
-      basicAuth({
-        async verifyUser(username, password, c) {
-          const owner = c.get("owner") as InferOutput<
-            typeof database,
-            "users",
-            { select: { username: true } }
-          >;
-          const link = c.get("link") as InferOutput<
-            typeof database,
-            "links",
-            {}
-          >;
+export const redirects = controller((app, box) => {
+  app.use(box.get(ownerLinkMiddleware));
 
-          if (username !== owner.username) return false;
-          if (link.hashedPassword) {
-            const verified = await bcrypt.compare(
-              password,
-              link.hashedPassword
-            );
-            return verified;
-          }
-          return true;
-        },
-      }),
-      async (c) => {
-        const link = c.get("link");
+  app.get("/:username/:name", async (event) => {
+    const { owner, link } = ownerLinkContext.get(event);
 
-        // increment in the background
-        // TODO: should be in a queue
-        database.collections.links
-          .updateOne(
-            {
-              _id: link._id,
-            },
-            {
-              $inc: {
-                views: 1,
-              },
-            }
-          )
-          .exec()
-          .catch((err) => {
-            console.log("Failed to update view count:", err);
-          });
+    // check for basic auth if link has password
+    if (link.hashedPassword) {
+      const authorization = event.req.headers.get("Authorization");
 
-        // redirect to the link
-        // @ts-ignore
-        return c.redirect(link.url);
+      if (!authorization || !authorization.startsWith("Basic ")) {
+        return new HTTPResponse(null, {
+          status: 401,
+          headers: {
+            "WWW-Authenticate": 'Basic realm="Secure Link"',
+          },
+        });
       }
+
+      // decode basic auth
+      const base64Credentials = authorization.slice(6);
+      const credentials = Buffer.from(base64Credentials, "base64").toString(
+        "utf-8"
+      );
+      const [username, password] = credentials.split(":");
+
+      // verify credentials
+      if (username !== owner.username || !password) {
+        return new HTTPResponse(null, {
+          status: 401,
+          headers: {
+            "WWW-Authenticate": 'Basic realm="Secure Link"',
+          },
+        });
+      }
+
+      const verified = await bcrypt.compare(password, link.hashedPassword);
+      if (!verified) {
+        return new HTTPResponse(null, {
+          status: 401,
+          headers: {
+            "WWW-Authenticate": 'Basic realm="Secure Link"',
+          },
+        });
+      }
+    }
+
+    // increment in the background
+    event.waitUntil(
+      database.collections.links
+        .updateOne(
+          {
+            _id: link._id,
+          },
+          {
+            $inc: {
+              views: 1,
+            },
+          }
+        )
+        .exec()
+        .catch((err) => {
+          console.log("Failed to update view count:", err);
+        })
     );
+
+    // redirect to the link
+    return redirect(link.url);
   });
+});

@@ -1,7 +1,12 @@
-import { createClient, createDatabase, createRelations } from "monarch-orm";
-import { appConfig } from "../config";
-import { links } from "./links";
-import { users } from "./users";
+import {
+  createClient,
+  createDatabase,
+  createRelations,
+  type InferOutput,
+} from "monarch-orm";
+import { appConfig } from "../config.ts";
+import { links } from "./links.ts";
+import { users } from "./users.ts";
 
 // define relations
 const userRelations = createRelations(users, ({ ref }) => {
@@ -24,3 +29,6 @@ export const database = createDatabase(client.db(), {
   links,
   linksRelations,
 });
+
+export type User = InferOutput<typeof database, "users">;
+export type Link = InferOutput<typeof database, "links", { omit: {} }>;

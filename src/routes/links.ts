@@ -1,166 +1,145 @@
-import { zValidator } from "@hono/zod-validator";
 import bcrypt from "bcrypt";
-import { HTTPException } from "hono/http-exception";
+import { HTTPError, readValidatedBody } from "h3";
 import { toObjectId } from "monarch-orm";
-import { createModule } from "serverstruct";
-import z from "zod";
-import { database } from "../db/db";
-import { JwtService } from "../services/jwt";
-import { Middlewares } from "../services/middlewares";
+import { controller } from "serverstruct";
+import { z } from "zod";
+import { database } from "../db/index.ts";
+import { authContext, authMiddleware } from "../middlewares/auth.ts";
 
-export const links = createModule()
-  .use<{ jwt: JwtService; middlewares: Middlewares }>()
-  .route((app, { middlewares }) => {
-    return app
-      .use(middlewares.auth())
-      .get("/", async (c) => {
-        const userId = c.get("userId");
+export const links = controller((app, box) => {
+  app.use(box.get(authMiddleware));
 
-        const links = await database.collections.links.find({ userId });
+  app.get("/", async (event) => {
+    const { userId } = authContext.get(event);
 
-        return c.json(links);
-      })
-      .post("/", zValidator("json", linksSchemas.create), async (c) => {
-        const userId = c.get("userId");
+    const links = await database.collections.links.find({ userId });
 
-        // parse req body
-        const body = c.req.valid("json");
-
-        // hash password if provided
-        let hashedPassword: string | undefined;
-        if (body.password) {
-          hashedPassword = await bcrypt.hash(body.password, 10);
-          delete body.password;
-        }
-
-        const link = await database.collections.links
-          .insertOne({
-            ...body,
-            userId: userId,
-            hashedPassword,
-          })
-          .catch((err) => {
-            if (err.code === 11000) {
-              throw new HTTPException(409, {
-                message: `Link with name '${body.name}' already exists`,
-              });
-            }
-            throw err;
-          });
-
-        return c.json(link, 201);
-      })
-      .get("/:id", async (c) => {
-        const userId = c.get("userId");
-
-        // get id from params
-        const id = toObjectId(c.req.param("id"));
-        if (!id) {
-          throw new HTTPException(404, {
-            message: "Link not found",
-          });
-        }
-
-        const link = await database.collections.links.findOne({
-          userId: userId,
-          _id: id,
-        });
-        if (!link) {
-          throw new HTTPException(404, {
-            message: "Link not found",
-          });
-        }
-
-        return c.json(link);
-      })
-      .put("/:id", zValidator("json", linksSchemas.update), async (c) => {
-        const userId = c.get("userId");
-
-        // parse req body
-        const body = c.req.valid("json");
-        // get id from params
-        const id = toObjectId(c.req.param("id"));
-        if (!id) {
-          throw new HTTPException(404, {
-            message: "Link not found",
-          });
-        }
-
-        // hash password if provided
-        let hashedPassword: string | undefined;
-        if (body.password) {
-          hashedPassword = await bcrypt.hash(body.password, 10);
-          delete body.password;
-        }
-
-        // update link
-        const updateResult = await database.collections.links.updateOne(
-          {
-            userId: userId,
-            _id: id,
-          },
-          {
-            $set: {
-              ...body,
-              hashedPassword,
-            },
-          }
-        );
-        if (!updateResult.modifiedCount) {
-          throw new HTTPException(404, {
-            message: "Link not found",
-          });
-        }
-
-        // get updated link
-        const link = await database.collections.links.findOne({
-          userId: userId,
-          _id: id,
-        });
-        if (!link) {
-          throw new HTTPException(404, {
-            message: "Link not found",
-          });
-        }
-
-        return c.json(link);
-      })
-      .delete("/:id", async (c) => {
-        const userId = c.get("userId");
-
-        // get id from params
-        const id = toObjectId(c.req.param("id"));
-        if (!id) {
-          throw new HTTPException(404, {
-            message: "Link not found",
-          });
-        }
-
-        // delete link
-        const deleteResult = await database.collections.links.deleteOne({
-          userId,
-          _id: id,
-        });
-        if (!deleteResult.deletedCount) {
-          throw new HTTPException(404, {
-            message: "Link not found",
-          });
-        }
-
-        return c.body(null, 200);
-      });
+    return links;
   });
 
-const linksSchemas = {
-  create: z.object({
-    name: z.string(),
-    url: z.string().url(),
-    password: z.string().optional(),
-  }),
+  app.post("/", async (event) => {
+    const { userId } = authContext.get(event);
 
-  update: z.object({
+    // parse req body
+    const { password, ...data } = await readValidatedBody(
+      event,
+      LinksSchema.create
+    );
+
+    // hash password if provided
+    const hashedPassword = password
+      ? await bcrypt.hash(password, 10)
+      : undefined;
+
+    const link = await database.collections.links
+      .insertOne({
+        ...data,
+        userId,
+        hashedPassword,
+      })
+      .catch((err) => {
+        if (err.code === 11000) {
+          throw new HTTPError(`Link with name '${data.name}' already exists`, {
+            status: 409,
+          });
+        }
+        throw err;
+      });
+
+    return link;
+  });
+
+  app.get("/:id", async (event) => {
+    const { userId } = authContext.get(event);
+
+    // get id from params
+    const id = toObjectId(event.context.params?.id!);
+    if (!id) {
+      throw new HTTPError("Link not found", { status: 404 });
+    }
+
+    const link = await database.collections.links.findOne({
+      userId: userId,
+      _id: id,
+    });
+    if (!link) {
+      throw new HTTPError("Link not found", { status: 404 });
+    }
+
+    return link;
+  });
+
+  app.put("/:id", async (event) => {
+    const { userId } = authContext.get(event);
+
+    // parse req body
+    const { password, ...data } = await readValidatedBody(
+      event,
+      LinksSchema.update
+    );
+    // get id from params
+    const id = toObjectId(event.context.params?.id!);
+    if (!id) {
+      throw new HTTPError("Link not found", { status: 404 });
+    }
+
+    // hash password if provided
+    const hashedPassword = password
+      ? await bcrypt.hash(password, 10)
+      : undefined;
+
+    // update link
+    const updateLink = await database.collections.links
+      .findOneAndUpdate(
+        {
+          userId: userId,
+          _id: id,
+        },
+        {
+          $set: {
+            ...data,
+            hashedPassword,
+          },
+        }
+      )
+      .options({
+        returnDocument: "after",
+      });
+    if (!updateLink) {
+      throw new HTTPError("Link not found", { status: 404 });
+    }
+
+    return updateLink;
+  });
+
+  app.delete("/:id", async (event) => {
+    const { userId } = authContext.get(event);
+
+    // get id from params
+    const id = toObjectId(event.context.params?.id!);
+    if (!id) {
+      throw new HTTPError("Link not found", { status: 404 });
+    }
+
+    // delete link
+    const deleteResult = await database.collections.links.deleteOne({
+      userId,
+      _id: id,
+    });
+    if (!deleteResult.deletedCount) {
+      throw new HTTPError("Link not found", { status: 404 });
+    }
+
+    return null;
+  });
+});
+
+class LinksSchema {
+  static create = z.object({
     name: z.string(),
     url: z.string().url(),
     password: z.string().optional(),
-  }),
-};
+  });
+
+  static update = this.create;
+}

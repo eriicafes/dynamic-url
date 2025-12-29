@@ -1,8 +1,8 @@
 {
   "name": "dynamic-url",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "version": "1.0.1",
+  "description": "Dynamic URL API with H3 and Monarch ORM",
+  "type": "module",
   "scripts": {
     "dev": "tsx watch ./src/main.ts",
     "build": "tsc",
@@ -12,22 +12,20 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@types/bcrypt": "^5.0.2",
-    "@types/node": "^22.14.1",
-    "tsx": "^4.19.3",
-    "typescript": "^5.8.3"
+    "@types/bcrypt": "^6.0.0",
+    "@types/node": "^25.0.3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@hono/node-server": "^1.14.1",
-    "@hono/zod-validator": "^0.4.3",
-    "bcrypt": "^5.1.1",
-    "dotenv": "^16.5.0",
-    "hollywood-di": "^0.6.1",
-    "hono": "^4.7.7",
-    "monarch-orm": "^0.8.0",
-    "mongodb": "^6.15.0",
+    "bcrypt": "^6.0.0",
+    "dotenv": "^17.2.3",
+    "getbox": "^1.0.0",
+    "h3": "2.0.1-rc.6",
+    "monarch-orm": "^0.8.1",
+    "mongodb": "^7.0.0",
     "njwt": "^2.0.1",
-    "serverstruct": "^0.3.0",
-    "zod": "^3.24.3"
+    "serverstruct": "^1.0.0",
+    "zod": "^4.2.1"
   }
 }
