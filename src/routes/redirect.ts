@@ -1,59 +1,35 @@
 import bcrypt from "bcrypt";
-import { HTTPResponse, redirect } from "h3";
+import { onError, redirect, requireBasicAuth, toResponse } from "h3";
 import { controller } from "serverstruct";
 import { database } from "../db/index.ts";
 import { ownerLinkContext, ownerLinkMiddleware } from "../middlewares/owner.ts";
 
 export const redirects = controller((app, box) => {
+  const db = box.get(database);
+
   app.use(box.get(ownerLinkMiddleware));
+  app.use(onError(toResponse));
 
   app.get("/:username/:name", async (event) => {
     const { owner, link } = ownerLinkContext.get(event);
 
     // check for basic auth if link has password
-    if (link.hashedPassword) {
-      const authorization = event.req.headers.get("Authorization");
-
-      if (!authorization || !authorization.startsWith("Basic ")) {
-        return new HTTPResponse(null, {
-          status: 401,
-          headers: {
-            "WWW-Authenticate": 'Basic realm="Secure Link"',
-          },
-        });
-      }
-
-      // decode basic auth
-      const base64Credentials = authorization.slice(6);
-      const credentials = Buffer.from(base64Credentials, "base64").toString(
-        "utf-8"
-      );
-      const [username, password] = credentials.split(":");
-
-      // verify credentials
-      if (username !== owner.username || !password) {
-        return new HTTPResponse(null, {
-          status: 401,
-          headers: {
-            "WWW-Authenticate": 'Basic realm="Secure Link"',
-          },
-        });
-      }
-
-      const verified = await bcrypt.compare(password, link.hashedPassword);
-      if (!verified) {
-        return new HTTPResponse(null, {
-          status: 401,
-          headers: {
-            "WWW-Authenticate": 'Basic realm="Secure Link"',
-          },
-        });
-      }
+    const hashedPassword = link.hashedPassword;
+    if (hashedPassword) {
+      await requireBasicAuth(event, {
+        async validate(username, password) {
+          // verify credentials
+          if (username !== owner.username) {
+            return false;
+          }
+          return await bcrypt.compare(password, hashedPassword);
+        },
+      });
     }
 
     // increment in the background
     event.waitUntil(
-      database.collections.links
+      db.collections.links
         .updateOne(
           {
             _id: link._id,

@@ -1,39 +1,37 @@
-import { factory } from "getbox";
-import { defineMiddleware, getValidatedRouterParams, HTTPError } from "h3";
+import { getValidatedRouterParams, HTTPError } from "h3";
 import type { InferOutput } from "monarch-orm";
+import { context, middleware } from "serverstruct";
 import z from "zod";
-import { Context } from "../context.ts";
-import { database, type Link } from "../db/index.ts";
+import { database, type DB } from "../db/index.ts";
 
-type Owner = InferOutput<
-  typeof database,
-  "users",
-  { select: { username: true } }
->;
+type Owner = InferOutput<DB, "users", { select: { username: true } }>;
+type OwnerLink = InferOutput<DB, "links", { omit: {} }>;
 
-export const ownerLinkContext = new Context<{ owner: Owner; link: Link }>();
+export const ownerLinkContext = context<{ owner: Owner; link: OwnerLink }>();
 
-export const ownerLinkMiddleware = factory(() => {
-  return defineMiddleware(async (event) => {
-    const params = await getValidatedRouterParams(
-      event,
-      z.object({
-        username: z.string(),
-        name: z.string(),
-      })
-    );
+export const ownerLinkMiddleware = middleware(async (event, _, box) => {
+  const db = box.get(database);
 
-    const owner = await database.collections.users
-      .findOne({ username: params.username })
-      .select({ username: true });
-    if (!owner) throw HTTPError.status(404);
+  const params = await getValidatedRouterParams(
+    event,
+    z.object({
+      username: z.string(),
+      name: z.string(),
+    })
+  );
 
-    const link = await database.collections.links.findOne({
+  const owner = await db.collections.users
+    .findOne({ username: params.username })
+    .select({ username: true });
+  if (!owner) throw HTTPError.status(404);
+
+  const link = await db.collections.links
+    .findOne({
       userId: owner._id,
       name: params.name,
-    });
-    if (!link) throw HTTPError.status(404);
+    })
+    .omit({});
+  if (!link) throw HTTPError.status(404);
 
-    ownerLinkContext.set(event, { owner, link });
-  });
+  ownerLinkContext.set(event, { owner, link });
 });

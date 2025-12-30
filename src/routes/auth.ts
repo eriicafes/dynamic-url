@@ -7,6 +7,7 @@ import { authContext, authMiddleware } from "../middlewares/auth.ts";
 import { JwtService } from "../services/jwt.ts";
 
 export const auth = controller((app, box) => {
+  const db = box.get(database);
   const jwt = box.get(JwtService);
 
   app.get(
@@ -15,7 +16,7 @@ export const auth = controller((app, box) => {
       const { userId } = authContext.get(event);
 
       // get user
-      const user = await database.collections.users.findById(userId);
+      const user = await db.collections.users.findById(userId);
 
       return user;
     },
@@ -30,7 +31,7 @@ export const auth = controller((app, box) => {
     const hashedPassword = await bcrypt.hash(body.password, 10);
 
     // create user
-    const user = await database.collections.users
+    const user = await db.collections.users
       .insertOne({
         username: body.username,
         hashedPassword,
@@ -57,13 +58,14 @@ export const auth = controller((app, box) => {
     const body = await readValidatedBody(event, AuthSchema.signin);
 
     // find user
-    const user = await database.collections.users
+    const user = await db.collections.users
       .findOne({
         username: body.username,
       })
       .select({
         hashedPassword: true,
       });
+    console.log(user, body);
     if (!user) {
       throw new HTTPError("Incorrect username or password", { status: 400 });
     }
@@ -87,12 +89,12 @@ export const auth = controller((app, box) => {
 
 class AuthSchema {
   static signup = z.object({
-    username: z.string(),
+    username: z.string().toLowerCase(),
     password: z.string().min(8),
   });
 
   static signin = z.object({
-    username: z.string(),
+    username: z.string().toLowerCase(),
     password: z.string(),
   });
 }

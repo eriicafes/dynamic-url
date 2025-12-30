@@ -7,12 +7,14 @@ import { database } from "../db/index.ts";
 import { authContext, authMiddleware } from "../middlewares/auth.ts";
 
 export const links = controller((app, box) => {
+  const db = box.get(database);
+
   app.use(box.get(authMiddleware));
 
   app.get("/", async (event) => {
     const { userId } = authContext.get(event);
 
-    const links = await database.collections.links.find({ userId });
+    const links = await db.collections.links.find({ userId });
 
     return links;
   });
@@ -31,7 +33,7 @@ export const links = controller((app, box) => {
       ? await bcrypt.hash(password, 10)
       : undefined;
 
-    const link = await database.collections.links
+    const link = await db.collections.links
       .insertOne({
         ...data,
         userId,
@@ -58,7 +60,7 @@ export const links = controller((app, box) => {
       throw new HTTPError("Link not found", { status: 404 });
     }
 
-    const link = await database.collections.links.findOne({
+    const link = await db.collections.links.findOne({
       userId: userId,
       _id: id,
     });
@@ -89,7 +91,7 @@ export const links = controller((app, box) => {
       : undefined;
 
     // update link
-    const updateLink = await database.collections.links
+    const updateLink = await db.collections.links
       .findOneAndUpdate(
         {
           userId: userId,
@@ -122,7 +124,7 @@ export const links = controller((app, box) => {
     }
 
     // delete link
-    const deleteResult = await database.collections.links.deleteOne({
+    const deleteResult = await db.collections.links.deleteOne({
       userId,
       _id: id,
     });

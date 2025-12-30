@@ -1,3 +1,4 @@
+import { factory, type ConstructorInstanceType } from "getbox";
 import {
   createClient,
   createDatabase,
@@ -21,14 +22,18 @@ const linksRelations = createRelations(links, ({ ref }) => {
   };
 });
 
-const client = createClient(appConfig.dbUrl);
+export const database = factory((box) => {
+  const { DB_URL } = box.get(appConfig);
+  const client = createClient(DB_URL);
 
-export const database = createDatabase(client.db(), {
-  users,
-  userRelations,
-  links,
-  linksRelations,
+  return createDatabase(client.db(), {
+    users,
+    userRelations,
+    links,
+    linksRelations,
+  });
 });
 
-export type User = InferOutput<typeof database, "users">;
-export type Link = InferOutput<typeof database, "links", { omit: {} }>;
+export type DB = ConstructorInstanceType<typeof database>;
+export type User = InferOutput<DB, "users", { omit: { hashedPassword: true } }>;
+export type Link = InferOutput<DB, "links", { omit: { hashedPassword: true } }>;

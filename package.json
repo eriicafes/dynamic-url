@@ -4,9 +4,9 @@
   "description": "Dynamic URL API with H3 and Monarch ORM",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch ./src/main.ts",
+    "dev": "tsx watch ./src/app.ts",
     "build": "tsc",
-    "start": "node dist/main.js"
+    "start": "node dist/app.js"
   },
   "keywords": [],
   "author": "",
@@ -25,7 +25,7 @@
     "monarch-orm": "^0.8.1",
     "mongodb": "^7.0.0",
     "njwt": "^2.0.1",
-    "serverstruct": "^1.0.0",
+    "serverstruct": "^1.1.0",
     "zod": "^4.2.1"
   }
 }
